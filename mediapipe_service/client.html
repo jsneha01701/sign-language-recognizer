@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ISL Live Sentence Recognizer</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 1100px; margin: 24px auto; padding: 0 16px; color: #172033; }
+        main { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(300px, 1fr); gap: 24px; }
+        section { padding: 20px; border: 1px solid #d8deea; border-radius: 12px; }
+        video { width: 100%; max-height: 480px; background: #111; border-radius: 8px; transform: scaleX(-1); }
+        button { margin: 12px 8px 0 0; padding: 10px 16px; border: 0; border-radius: 6px; background: #155eef; color: white; font-size: 1rem; cursor: pointer; }
+        button:disabled { opacity: .55; cursor: default; }
+        #sentence { min-height: 110px; padding: 16px; border-radius: 8px; background: #f1f5ff; font-size: 1.7rem; line-height: 1.5; overflow-wrap: anywhere; }
+        #status { min-height: 1.5em; color: #475467; }
+        .note { color: #475467; line-height: 1.5; }
+        @media (max-width: 700px) { main { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+<h1>Indian Sign Language: Live Sentence Recognizer</h1>
+<p class="note">Show one sign at a time. Lower your hands briefly between signs so the recognizer can separate them. The current prototype supports its trained starter vocabulary only.</p>
+<main>
+    <section>
+        <h2>Camera</h2>
+        <video id="video" autoplay playsinline muted></video>
+        <canvas id="canvas" hidden></canvas>
+        <div>
+            <button id="start">Start camera</button>
+            <button id="stop" disabled>Stop</button>
+        </div>
+        <p id="status" role="status">Ready. Allow camera access to begin.</p>
+    </section>
+    <section>
+        <h2>Recognized sentence</h2>
+        <div id="sentence" aria-live="polite">Your recognized signs will appear here.</div>
+        <p id="lastSign" class="note">Last recognized sign: —</p>
+        <button id="clear">Clear sentence</button>
+    </section>
+</main>
+<script>
+    const video = document.getElementById("video");
+    const canvas = document.getElementById("canvas");
+    const context = canvas.getContext("2d");
+    const startButton = document.getElementById("start");
+    const stopButton = document.getElementById("stop");
+    const status = document.getElementById("status");
+    const sentence = document.getElementById("sentence");
+    const lastSign = document.getElementById("lastSign");
+    let stream = null;
+    let running = false;
+    let frameNumber = 0;
+
+    async function processFrames() {
+        if (!running) return;
+        if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.save();
+            context.translate(canvas.width, 0);
+            context.scale(-1, 1);
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            context.restore();
+            const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", 0.75));
+            if (blob && running) {
+                const form = new FormData();
+                form.append("file", blob, `frame-${frameNumber++}.jpg`);
+                try {
+                    const response = await fetch("/recognize/frame", { method: "POST", body: form });
+                    const result = await response.json();
+                    if (!response.ok) throw new Error(result.detail || `Request failed (${response.status})`);
+                    sentence.textContent = result.sentence || "Show a sign to begin.";
+                    if (result.event) lastSign.textContent = `Last recognized sign: ${result.event}`;
+                    status.textContent = result.buffered_frames < result.sequence_length
+                        ? `Analyzing: ${result.buffered_frames}/${result.sequence_length} frames`
+                        : "Listening for the next sign. Briefly lower your hands between signs.";
+                } catch (error) {
+                    status.textContent = error.message;
+                    status.style.color = "#b42318";
+                    running = false;
+                    stopCamera();
+                    return;
+                }
+            }
+        }
+        if (running) window.setTimeout(processFrames, 100);
+    }
+
+    async function startCamera() {
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false });
+            video.srcObject = stream;
+            running = true;
+            frameNumber = 0;
+            startButton.disabled = true;
+            stopButton.disabled = false;
+            status.style.color = "";
+            status.textContent = "Camera started. Show one sign at a time.";
+            await fetch("/recognize/reset", { method: "POST" });
+            processFrames();
+        } catch (error) {
+            status.textContent = `Could not start camera: ${error.message}`;
+            status.style.color = "#b42318";
+        }
+    }
+
+    function stopCamera() {
+        running = false;
+        if (stream) stream.getTracks().forEach(track => track.stop());
+        stream = null;
+        video.srcObject = null;
+        startButton.disabled = false;
+        stopButton.disabled = true;
+    }
+
+    startButton.addEventListener("click", startCamera);
+    stopButton.addEventListener("click", () => {
+        stopCamera();
+        status.style.color = "";
+        status.textContent = "Camera stopped.";
+    });
+    document.getElementById("clear").addEventListener("click", async () => {
+        try {
+            const response = await fetch("/recognize/reset", { method: "POST" });
+            if (!response.ok) throw new Error(`Reset failed (${response.status})`);
+            sentence.textContent = "Your recognized signs will appear here.";
+            lastSign.textContent = "Last recognized sign: —";
+            status.style.color = "";
+            status.textContent = running ? "Sentence cleared. Show a sign to begin." : "Sentence cleared.";
+        } catch (error) {
+            status.textContent = error.message;
+            status.style.color = "#b42318";
+        }
+    });
+</script>
+</body>
+</html>

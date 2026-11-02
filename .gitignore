@@ -1,0 +1,64 @@
+HELP.md
+target/
+.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/
+
+### Python ###
+# Virtual environments
+.venv/
+.venv311/
+.venv312/
+venv/
+env/
+ENV/
+
+# Python cache and compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Training data and models (only exclude raw videos, keep processed data & models)
+mediapipe_service/data/raw/
+mediapipe_service/data/live_landmarks/
+mediapipe_service/models/holistic_landmarker.task
+# *.npy and *.pt can be committed if needed
+# Uncomment below if you want to exclude them
+# *.npy
+# *.pt
+
+# Logs
+*.log

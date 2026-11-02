@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+mediapipe==0.10.35
+opencv-contrib-python==4.11.0.86
+numpy==1.26.4
+protobuf<5
+python-multipart
+torch
+torchvision
+onnx==1.17.0
